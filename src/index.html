@@ -1,39 +1,475 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="stylesheet" href="styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/main.js" defer></script>
-  </head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARIA</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
-  <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+    :root {
+      --bg: #030812;
+      --surface: rgba(10,25,65,0.7);
+      --border: rgba(60,100,200,0.22);
+      --border-hover: rgba(80,140,255,0.45);
+      --text-primary: #d0e4ff;
+      --text-muted: rgba(150,180,230,0.6);
+      --accent: #5eaeff;
+      --green: #3de8a0;
+    }
 
-      <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+    html, body {
+      width:100%; height:100%;
+      overflow:hidden;
+      background: var(--bg);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: var(--text-primary);
+    }
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
-    </main>
-  </body>
+    canvas {
+      position:fixed; inset:0; z-index:0;
+    }
+
+    .ui {
+      position:relative; z-index:10;
+      height:100vh;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:24px 20px;
+      max-width:680px; margin:0 auto;
+    }
+
+    .aname {
+      background:transparent;
+      border:none;
+      border-bottom:1px solid rgba(80,130,200,0.3);
+      color:var(--accent);
+      font-family:'Courier New',monospace;
+      font-size:14px; letter-spacing:8px;
+      text-transform:uppercase; text-align:center;
+      outline:none; width:200px; padding:3px 4px;
+      margin-bottom:28px;
+    }
+
+    .orb-wrap {
+      position:relative;
+      width:170px; height:170px;
+      display:flex; align-items:center; justify-content:center;
+      margin-bottom:28px;
+    }
+
+    .ring1, .ring2 {
+      position:absolute; border-radius:50%;
+      border:1px solid rgba(80,140,255,0.12);
+      pointer-events:none;
+    }
+    .ring1 { inset:-14px; animation:rpulse 3s ease-in-out infinite; }
+    .ring2 { inset:-28px; animation:rpulse 3s ease-in-out infinite 0.9s; }
+    @keyframes rpulse {
+      0%,100%{opacity:0.35;transform:scale(1);}
+      50%{opacity:1;transform:scale(1.025);}
+    }
+
+    .orb {
+      width:160px; height:160px; border-radius:50%;
+      cursor:pointer; position:relative;
+      background:radial-gradient(circle at 38% 36%, #1a4a8a 0%, #0a1e45 45%, #040c22 100%);
+      box-shadow:0 0 40px rgba(50,120,255,0.15),0 0 80px rgba(30,80,200,0.07),inset 0 0 28px rgba(100,160,255,0.1);
+      transition:transform 0.3s;
+    }
+    .orb::before {
+      content:''; position:absolute; inset:3px;
+      border-radius:50%; border:1px solid rgba(100,160,255,0.2);
+    }
+    .orb::after {
+      content:''; position:absolute;
+      top:14%; left:17%; width:36%; height:20%;
+      background:radial-gradient(ellipse,rgba(180,210,255,0.18) 0%,transparent 70%);
+      border-radius:50%; transform:rotate(-25deg);
+    }
+    .orb:hover { transform:scale(1.03); }
+
+    .orb.listening {
+      box-shadow:0 0 55px rgba(50,220,150,0.3),inset 0 0 30px rgba(80,220,160,0.15);
+      animation:lpulse 0.85s ease-in-out infinite alternate;
+    }
+    .orb.speaking {
+      box-shadow:0 0 55px rgba(100,160,255,0.35),inset 0 0 30px rgba(120,180,255,0.18);
+      animation:spulse 0.45s ease-in-out infinite alternate;
+    }
+    .orb.thinking { animation:trotate 2.4s linear infinite; }
+
+    @keyframes lpulse { from{transform:scale(1);}to{transform:scale(1.05);} }
+    @keyframes spulse  { from{transform:scale(1);}to{transform:scale(1.07);} }
+    @keyframes trotate { from{filter:hue-rotate(0deg);}to{filter:hue-rotate(360deg);} }
+
+    .bars {
+      display:flex; gap:3px; align-items:flex-end;
+      height:26px; margin-bottom:12px;
+      opacity:0; transition:opacity 0.3s;
+    }
+    .bars.on { opacity:1; }
+    .bar {
+      width:3px; background:var(--green); border-radius:2px;
+      animation:bbounce 0.5s ease-in-out infinite alternate;
+    }
+    .bar:nth-child(1){height:6px; animation-delay:0.00s;}
+    .bar:nth-child(2){height:14px;animation-delay:0.07s;}
+    .bar:nth-child(3){height:22px;animation-delay:0.14s;}
+    .bar:nth-child(4){height:10px;animation-delay:0.21s;}
+    .bar:nth-child(5){height:18px;animation-delay:0.28s;}
+    .bar:nth-child(6){height:8px; animation-delay:0.35s;}
+    .bar:nth-child(7){height:16px;animation-delay:0.42s;}
+    @keyframes bbounce {
+      from{transform:scaleY(0.3);opacity:0.55;}
+      to{transform:scaleY(1.2);opacity:1;}
+    }
+
+    .status {
+      font-size:11px; letter-spacing:4px;
+      text-transform:uppercase; color:var(--text-muted);
+      margin-bottom:20px; min-height:18px; transition:color 0.3s;
+    }
+    .status.listening { color:rgba(61,232,160,0.9); }
+    .status.speaking  { color:rgba(100,170,255,0.9); }
+    .status.thinking  { color:rgba(167,139,250,0.9); }
+
+    .chat {
+      width:100%; max-height:200px;
+      overflow-y:auto;
+      display:flex; flex-direction:column; gap:10px;
+      padding:0 2px; margin-bottom:20px;
+      scrollbar-width:thin;
+      scrollbar-color:rgba(80,120,200,0.25) transparent;
+    }
+
+    .msg {
+      font-size:14px; line-height:1.6;
+      padding:10px 15px; border-radius:14px;
+      max-width:86%;
+    }
+    .msg.user {
+      background:rgba(40,80,160,0.22);
+      border:1px solid rgba(80,130,220,0.18);
+      color:#a8c8f0; align-self:flex-end;
+      border-bottom-right-radius:3px;
+    }
+    .msg.bot {
+      background:rgba(15,35,80,0.45);
+      border:1px solid rgba(60,100,180,0.18);
+      color:#d0e4ff; align-self:flex-start;
+      border-bottom-left-radius:3px;
+    }
+
+    .input-row {
+      display:flex; gap:10px;
+      width:100%; align-items:center;
+    }
+
+    .tinput {
+      flex:1;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:28px;
+      padding:12px 20px;
+      color:var(--text-primary);
+      font-family:'Segoe UI',system-ui,sans-serif;
+      font-size:14px; outline:none;
+      transition:border-color 0.3s,background 0.3s;
+    }
+    .tinput::placeholder { color:rgba(150,180,230,0.28); }
+    .tinput:focus {
+      border-color:var(--border-hover);
+      background:rgba(12,30,75,0.85);
+    }
+
+    .btn {
+      width:46px; height:46px; border-radius:50%;
+      border:1px solid var(--border);
+      background:var(--surface);
+      color:#7ab0f5; font-size:18px;
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; transition:all 0.2s;
+    }
+    .btn:hover {
+      border-color:var(--border-hover);
+      background:rgba(30,70,160,0.65);
+      color:#aed0ff; transform:scale(1.06);
+    }
+    .btn:active { transform:scale(0.97); }
+
+    .mic.active {
+      background:rgba(20,100,70,0.55);
+      border-color:rgba(60,220,140,0.45);
+      color:var(--green);
+      animation:mpulse 0.85s ease-in-out infinite alternate;
+    }
+    @keyframes mpulse {
+      from{box-shadow:0 0 0 0 rgba(60,220,140,0.3);}
+      to{box-shadow:0 0 0 9px rgba(60,220,140,0);}
+    }
+
+    .footer {
+      margin-top:14px; font-size:11px;
+      letter-spacing:1.5px;
+      color:rgba(100,140,200,0.28);
+      text-transform:uppercase;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div class="ui">
+  <input class="aname" id="aname" value="A R I A" maxlength="14" />
+
+  <div class="orb-wrap">
+    <div class="ring2"></div>
+    <div class="ring1"></div>
+    <div class="orb" id="orb"></div>
+  </div>
+
+  <div class="bars" id="bars">
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    <div class="bar"></div>
+  </div>
+
+  <div class="status" id="status">Online · Ready</div>
+
+  <div class="chat" id="chat"></div>
+
+  <div class="input-row">
+    <button class="btn mic" id="micBtn">🎤</button>
+    <input class="tinput" id="tinput" placeholder="Ask me anything..." autocomplete="off" />
+    <button class="btn" id="sendBtn">➤</button>
+  </div>
+
+  <div class="footer">Gemini Flash · Free · Voice enabled</div>
+</div>
+
+<script>
+// ── CONFIG — PASTE YOUR KEY HERE ──
+const GEMINI_KEY = 'YOUR_GEMINI_API_KEY_HERE';
+// Get free key at: https://aistudio.google.com
+
+// ── Particles ──
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, pts = [], tick = 0, pstate = 'idle';
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  initPts();
+}
+
+function initPts() {
+  pts = [];
+  const n = Math.min(Math.floor(W * H / 5500), 200);
+  for (let i = 0; i < n; i++) pts.push({
+    x: Math.random()*W, y: Math.random()*H,
+    vx:(Math.random()-.5)*.35, vy:(Math.random()-.5)*.35,
+    br:Math.random()*1.6+.4, r:1,
+    a:Math.random()*.45+.08,
+    h:Math.random()*60+200,
+    p:Math.random()*Math.PI*2
+  });
+}
+
+function drawParticles() {
+  requestAnimationFrame(drawParticles);
+  ctx.clearRect(0,0,W,H);
+  tick++;
+  const spd  = pstate==='listening'?3.8:pstate==='speaking'?2.8:pstate==='thinking'?2:1;
+  const maxD = pstate==='listening'?130:pstate==='speaking'?115:pstate==='thinking'?100:75;
+  const hs   = pstate==='listening'?55:pstate==='speaking'?25:0;
+
+  for (let i=0;i<pts.length;i++) {
+    const p=pts[i];
+    p.p+=.018;
+    p.x+=p.vx*spd+Math.sin(p.p*.65)*.12;
+    p.y+=p.vy*spd+Math.cos(p.p*.5)*.12;
+    if(p.x<0)p.x=W; if(p.x>W)p.x=0;
+    if(p.y<0)p.y=H; if(p.y>H)p.y=0;
+    p.r = pstate==='speaking'
+      ? p.br+Math.sin(tick*.14+p.p)*1.6
+      : pstate==='listening'
+      ? p.br+Math.abs(Math.sin(tick*.18+p.p))*2
+      : p.br;
+    const hue = p.h + hs*Math.sin(tick*.04+p.p);
+    const al  = p.a + (pstate!=='idle'?.18:0);
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${hue},78%,65%,${al})`;
+    ctx.fill();
+    for(let j=i+1;j<pts.length;j++){
+      const q=pts[j];
+      const dx=p.x-q.x,dy=p.y-q.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<maxD){
+        ctx.beginPath();
+        ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y);
+        ctx.strokeStyle=`hsla(${hue},70%,65%,${(1-d/maxD)*.16})`;
+        ctx.lineWidth=.5; ctx.stroke();
+      }
+    }
+  }
+}
+
+window.addEventListener('resize', resize);
+resize();
+drawParticles();
+
+// ── State ──
+const orb    = document.getElementById('orb');
+const status = document.getElementById('status');
+const chat   = document.getElementById('chat');
+const tinput = document.getElementById('tinput');
+const sendBtn= document.getElementById('sendBtn');
+const micBtn = document.getElementById('micBtn');
+const bars   = document.getElementById('bars');
+const aname  = document.getElementById('aname');
+let appState = 'idle';
+
+function setState(s) {
+  appState = s; pstate = s;
+  orb.className = 'orb';
+  status.className = 'status';
+  bars.className = 'bars';
+  micBtn.classList.remove('active');
+  if(s==='listening'){
+    orb.classList.add('listening');
+    status.classList.add('listening');
+    status.textContent='Listening...';
+    bars.classList.add('on');
+    micBtn.classList.add('active');
+  } else if(s==='thinking'){
+    orb.classList.add('thinking');
+    status.classList.add('thinking');
+    status.textContent='Thinking...';
+  } else if(s==='speaking'){
+    orb.classList.add('speaking');
+    status.classList.add('speaking');
+    status.textContent='Speaking...';
+  } else {
+    status.textContent='Online · Ready';
+  }
+}
+
+function addMsg(role, text) {
+  const d=document.createElement('div');
+  d.className=`msg ${role==='user'?'user':'bot'}`;
+  d.textContent=text;
+  chat.appendChild(d);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+// ── AI ──
+const history=[];
+
+async function ask(userMsg) {
+  if(!userMsg.trim()||appState==='thinking') return;
+  stopSpeak();
+  addMsg('user', userMsg);
+  history.push({role:'user', parts:[{text:userMsg}]});
+  setState('thinking');
+
+  const name = aname.value.replace(/\s/g,'') || 'ARIA';
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${AIzaSyBQFB6x_1ir0aM0MQfCNQ2xBOYaHVGXI0U}`,
+      {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          system_instruction:{parts:[{text:`You are ${name}, a personal AI assistant. Be warm, concise (2-4 sentences), and helpful.`}]},
+          contents: history
+        })
+      }
+    );
+    const data = await res.json();
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, something went wrong.';
+    history.push({role:'model', parts:[{text:reply}]});
+    if(history.length>40) history.splice(0,2);
+    addMsg('bot', reply);
+    speak(reply);
+  } catch(e) {
+    addMsg('bot','Error: '+e.message+'. Check your API key.');
+    setState('idle');
+  }
+}
+
+// ── Voice ──
+const synth = window.speechSynthesis;
+let voices = [];
+synth.onvoiceschanged = () => { voices = synth.getVoices(); };
+voices = synth.getVoices();
+
+function speak(text) {
+  synth.cancel();
+  setState('speaking');
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate=1.05; u.pitch=1; u.volume=1;
+  const v = voices.find(v=>v.name.includes('Samantha')||v.name.includes('Karen')||
+    (v.lang.startsWith('en')&&v.name.toLowerCase().includes('female')))
+    || voices.find(v=>v.lang.startsWith('en'));
+  if(v) u.voice=v;
+  u.onend=()=>setState('idle');
+  u.onerror=()=>setState('idle');
+  synth.speak(u);
+}
+
+function stopSpeak() { synth.cancel(); }
+
+let recog=null;
+function startListen() {
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){addMsg('bot','Voice not supported. Use Chrome or Edge.');return;}
+  stopSpeak();
+  recog=new SR();
+  recog.lang='en-US';
+  recog.interimResults=false;
+  recog.onresult=e=>{
+    const t=e.results[0][0].transcript;
+    ask(t);
+  };
+  recog.onerror=()=>setState('idle');
+  recog.onend=()=>{ if(appState==='listening') setState('idle'); };
+  setState('listening');
+  recog.start();
+}
+
+// ── Events ──
+micBtn.addEventListener('click',()=>{
+  if(appState==='listening'){ recog?.stop(); setState('idle'); }
+  else if(appState==='speaking'){ stopSpeak(); setState('idle'); }
+  else startListen();
+});
+
+orb.addEventListener('click',()=>{
+  if(appState==='idle') startListen();
+  else if(appState==='speaking'){ stopSpeak(); setState('idle'); }
+  else if(appState==='listening'){ recog?.stop(); setState('idle'); }
+});
+
+sendBtn.addEventListener('click',()=>{
+  const m=tinput.value.trim();
+  if(m){ ask(m); tinput.value=''; }
+});
+
+tinput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ const m=tinput.value.trim(); if(m){ask(m);tinput.value='';} }
+});
+
+// ── Greeting ──
+setTimeout(()=>{
+  const n=aname.value.replace(/\s/g,'')||'ARIA';
+  const g=`Hello. I'm ${n}, your personal assistant. Click the orb or mic to talk, or type below.`;
+  addMsg('bot',g);
+  speak(g);
+},500);
+</script>
+</body>
 </html>
